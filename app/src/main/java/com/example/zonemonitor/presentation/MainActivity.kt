@@ -1,8 +1,9 @@
 package com.example.zonemonitor.presentation
 
 import android.Manifest
+import android.content.Context
 import android.content.pm.PackageManager
-import android.os.Bundle
+import android.os.*
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -26,16 +27,18 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var healthServicesClient: HealthServicesClient
     private var currentHeartRate by mutableStateOf(0.0)
+    private lateinit var vibrator: Vibrator
+    private var isVibrating = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         healthServicesClient = HealthServices.getClient(this)
+        vibrator = getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
 
         setContent {
             MainScreen()
         }
 
-        // Check and request body sensors permission
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.BODY_SENSORS)
             != PackageManager.PERMISSION_GRANTED
         ) {
@@ -61,6 +64,8 @@ class MainActivity : ComponentActivity() {
             Button(onClick = { startHeartRateMonitoring() }) {
                 Text("Refresh Heart Rate")
             }
+            Spacer(modifier = Modifier.height(8.dp))
+            Text("Vibration: ${if (isVibrating) "ON" else "OFF"}")
         }
     }
 
@@ -97,6 +102,7 @@ class MainActivity : ComponentActivity() {
                                     val heartRate = (it.value as Double)
                                     currentHeartRate = heartRate
                                     Log.d(TAG, "Heart Rate: $heartRate bpm")
+                                    checkHeartRateAndVibrate(heartRate)
                                 }
                             }
                         }
@@ -106,6 +112,29 @@ class MainActivity : ComponentActivity() {
                 Log.e(TAG, "Error registering for heart rate data: ${e.message}")
             }
         }
+    }
+
+    private fun checkHeartRateAndVibrate(heartRate: Double) {
+        if (heartRate < 80 && !isVibrating) {
+            startVibration()
+        } else if (heartRate >= 80 && isVibrating) {
+            stopVibration()
+        }
+    }
+
+    private fun startVibration() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            vibrator.vibrate(VibrationEffect.createWaveform(longArrayOf(0, 1000), 0))
+        } else {
+            @Suppress("DEPRECATION")
+            vibrator.vibrate(longArrayOf(0, 1000), 0)
+        }
+        isVibrating = true
+    }
+
+    private fun stopVibration() {
+        vibrator.cancel()
+        isVibrating = false
     }
 
     companion object {
